@@ -1,0 +1,22 @@
+# ===============================================
+#
+# A file that lists the array dimensions of
+# the heads file information that outputs
+# from MODFLOW.
+#
+# This file is the place to enter model
+# specific information.
+#
+# ===============================================
+
+set NunberOfRows = 603
+set NumberOfCol = 740
+set NumberLayers = 11
+set NumberOfStressPeriods = 133
+set NumberOfTimeSteps = 1
+set NumberOfCellByCell = 12
+
+NROW=603, NCOL=740, NLAY=11, NSP=133, NSTEP=1, NCBC=12
+
+set NUM_LAKES = 488
+set NUM_LAKE_CELLS = 18180
