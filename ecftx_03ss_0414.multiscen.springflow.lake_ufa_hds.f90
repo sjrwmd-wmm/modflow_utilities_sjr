@@ -117,7 +117,7 @@ PROGRAM MAIN
 	character(len=500) :: HDS_FILE, STRESS_PERIOD_FILE
 	character(len=6) :: STRESS_PERIOD(NSP)
 
-	character(len=50) :: CONTROL_FILE !="2040_refPF.lake_spring_testfile_PMB.in"
+	character(len=100) :: CONTROL_FILE !="2040_refPF.lake_spring_testfile_PMB.in"
 	character(len=500) :: input_line(8), input_line2
 	character(len=5) :: trial_read
 	character(len=1) :: tmp1, tmp2, tmp3, tmp4
