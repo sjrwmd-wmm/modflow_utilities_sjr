@@ -7,16 +7,24 @@
 # This file is the place to enter model
 # specific information.
 #
+# The parameter names and their format are:
+# set NumberOfRows: <enter integer number>
+# set NumberOfCol: <enter integer number>
+# set NumberOfLay: <enter integer number>
+# set NumberOfStressPeriods: <enter integer number>
+# set NumberOfTimeSteps: <enter integer number>
+# set NumberOfCellByCell: <enter integer number>
+# set NumberOfLakes: <enter integer number>
+# set NumberOfLakeCells: <enter integer number>
+# set LakeHeadsLayer: <enter integer number>
 # ===============================================
 
-set NunberOfRows = 603
-set NumberOfCol = 740
-set NumberLayers = 11
-set NumberOfStressPeriods = 133
-set NumberOfTimeSteps = 1
-set NumberOfCellByCell = 12
-
-NROW=603, NCOL=740, NLAY=11, NSP=133, NSTEP=1, NCBC=12
-
-set NUM_LAKES = 488
-set NUM_LAKE_CELLS = 18180
+set NumberOfRows: 603
+set NumberOfCol: 740
+set NumberOfLay: 11
+set NumberOfStressPeriods: 133
+set NumberOfTimeSteps: 1
+set NumberOfCellByCell: 12
+set NumberOfLakes: 488
+set NumberOfLakeCells: 18180
+set LakeHeadsLayer: 3
