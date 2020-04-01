@@ -113,7 +113,27 @@ PROGRAM MAIN
     integer, parameter :: unit_SP = 11, unit_LCF = 12, unit_HDS = 14
     integer, parameter :: unit_L_ID = 15, unit_UFA_L = 16, unit_SPR_DRN = 17, unit_SPROUT = 18
     integer :: ioerr
+        
     integer :: narg, arg
+    character(len=100) :: TMP_ARG
+    character(len=1) :: dash_check
+    logical :: verbose_print, full_doc_flag, usage_doc_flag, skip_iteration
+    integer :: j
+    
+    ! Input file ! Example: "2040_refPF.lake_spring_testfile_PMB.in"
+    character(len=100) :: CONTROL_FILE_TMP
+    character(:),allocatable :: CONTROL_FILE
+    
+    integer, parameter :: number_of_input_data_coloumns = 9  !!! PMB 20200316. Move to the header control file?
+    character(len=500) :: input_line(number_of_input_data_coloumns), input_line2
+    character(len=5) :: trial_read
+    character(len=1) :: tmp1, tmp2, tmp3, tmp4
+    character(len=1), parameter :: commentchar="#", blankchar=" "
+    character(len=2) :: OPARG_2
+    
+    integer :: n_progfunc_doc, n_infiles_doc, n_outfiles_doc, n_usage_doc
+    character(len=150),dimension(:), allocatable :: progfunc_doc, infiles_doc, outfiles_doc, usage_doc
+    
     
     ! Values read from header control file
     !integer, parameter :: NROW=603, NCOL=740, NLAY=11, NSP=133, NSTEP=1, NCBC=12
@@ -135,16 +155,6 @@ PROGRAM MAIN
     character(len=500) :: HDS_FILE, STRESS_PERIOD_FILE
     !character(len=6) :: STRESS_PERIOD(NSP)
     character(len=6), dimension(:), allocatable :: STRESS_PERIOD
-
-    character(len=100) :: CONTROL_FILE !="2040_refPF.lake_spring_testfile_PMB.in"
-    integer, parameter :: number_of_input_data_coloumns = 9  !!! PMB 20200316. Move to the header control file?
-    character(len=500) :: input_line(number_of_input_data_coloumns), input_line2
-    character(len=5) :: trial_read
-    character(len=1) :: tmp1, tmp2, tmp3, tmp4
-    character(len=1), parameter :: commentchar="#", blankchar=" "
-    character(len=2) :: OPARG_2
-
-    logical :: verbose_print
     !--------------------------
 
 
@@ -195,105 +205,213 @@ PROGRAM MAIN
     !               END HEADERS AND VARIABLES
     !
     ! -----------------------------------------------------------------------
-
     
-    !   Initialize the output to stdout to not be Verbose
-    verbose_print = .false.
-
-
-    ! =======================================================================
-    !
-    !		CHECK COMMAND-LINE ARGUEMENTS AND DISPLAY HELP
-    !
-    ! =======================================================================
     
-    !   GET THE NAME OF THE INPUT CONTROL FILE FROM THE ARGUMENT
-    ! Get the commmand-line arguments
-    narg=command_argument_count()
-
-    ! Check that the number of arguments is correct
-    if (narg .NE. 1 .and. narg .NE. 2) then
-	print*, ""
-	print*, "PROGRAM FUNCTIONS:"
-	print*, "The program performs the following functions for each heads"
-	print*, "file that the program is instructed to process:"
-	print*, "1. Read and extract springflow and lake UFA-heads"
-	print*, "2. Calculate the average lake head levels for each lake"
-	print*, "3. Calculate each springs' springflow from the head,"
-	print*, "   pool elevation, and conductance"
-	print*, ""
-	print*, "WHAT THE PROGRAM EXPECTS:"
-	print*, "The program expects an input control file where each line"
-	print*, "defines the file names of input and output files associated"
-	print*, "with a single heads file needing to be processed. Each line"
-	print*, "of the input control file to be processed MUST have the following"
-	print*, "columns in the order listed:"
-	print*, "1     LINE_NUMBER - integer number for user reference"
-	print*, "2     STRESS-PERIOD_NAME_FILE - input file listing the Stress Periods"
-	print*, "3     BINARY_HEAD_FILE - input BINARY heads file"
-	print*, "4     SORTED_LAKE_CELL_FILE - input file listing sorted lake cells"
-	print*, "5     SORTED_LAKE_ID_AND_CELL_COUNTS - input file listing sorted lake id and cell counts"
-	print*, "6     UFA-LAKE_HYDROGRAPH_OUTPUT_FILE_NAME - output file to write out the averaged UFA lake heads"
-	print*, "7     SPRING_DRN_FILE_NAME - input drain file used for the particular model"
-	print*, "8     SPRINGFLOW_OUTPUT_FILE_NAME - output file to write out springflows"
-	print*, ""
-	print*, "The input control file MAY contain blank or commented-out lines."
-	print*, "Full or relative PATHS of files are accepted."
-	print*, "Example input control file:"
-	print*, ""
-	print*, "----------------------------------------"
-	print*, "# 1     LINE_NUMBER"
-	print*, "# 2     STRESS-PERIOD_NAME_FILE"
-	print*, "# 3     BINARY_HEAD_FILE"
-	print*, "# 4     SORTED_LAKE_CELL_FILE"
-	print*, "# 5     SORTED_LAKE_ID_AND_CELL_COUNTS"
-	print*, "# 6     UFA-LAKE_HYDROGRAPH_OUTPUT_FILE_NAME"
-	print*, "# 7     SPRING_DRN_FILE_NAME"
-	print*, "# 8     SPRINGFLOW_OUTPUT_FILE_NAME"
-	print*, ""
-	print*, '1 "../sp1.txt" hds1.hds cells_1.txt cell_count_1.txt out.lake_1.dat drain1.drn out.springflow_1.dat'
-	print*, '2 sp2.txt hds2.hds cells_2.txt cell_count_2.txt "lakes/out.lake_2.dat" drain2.drn "sprgs/out.springflow_2.dat"'
-	print*, '# 3 "../sp3.txt" hds3.hds cells_3.txt cell_count_3.txt out.lake_3.dat drain3.drn out.springflow_3.dat'
-	print*, "<a blank line>"
-	print*, "<a blank line>"
-	print*, "# Just a little comment line"
-	print*, "4 sp4.txt hds4.hds cells_4.txt cell_count_4.txt out.lake_4.dat drain4.drn out.springflow_4.dat"
-	print*, "----------------------------------------"
-	print*, ""
-	print*, "USAGE:"
-	print*, "Names within <> should be replaced with the correct names."
-	print*, ""
-	print*, "<PATH>/ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe", &
-		"<input_control_file> -v[verbose print, optional, default is off]"
-	print*, ""
-	print*, "Example of how to run this program with simple stdout print:"
-	print*, "./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe input_control.in"
-	print*, ""
-	print*, "Example of how to run this program with verbose stdout print:"
-	print*, "./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe input_control.in -v"
-	print*, ""
-	stop
+    
+    ! xoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxox
+    !
+    ! PROCESS COMMAND-LINE ARGUEMENTS
+    !
+    ! xoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxox
+    
+    
+    ! Retrieve the number of command-line arguments
+    narg = command_argument_count()
+    
+    
+    ! ===========================================
+    ! Check for flags and input file
+    ! ===========================================
+    
+    ! Initialize all the command-line option flags
+    full_doc_flag = .false.
+    usage_doc_flag = .false.
+    verbose_print = .false. ! not verbose print statements
+    skip_iteration = .false.
+    
+    if (narg .LT. 1) then
+        usage_doc_flag = .true.
+    else
+        do arg=1,narg
+            if (skip_iteration) then
+                skip_iteration = .false.
+                CYCLE ! skip the next iteration
+            else
+                call get_command_argument(arg,TMP_ARG)
+                if (TMP_ARG .EQ. "-v") then
+                    verbose_print = .true.
+                else if (TMP_ARG .EQ. "-in") then
+                    if (narg .LT. (arg+1)) then
+                        usage_doc_flag = .true.
+                        print*, ""
+                        print*, "ERROR: No Input Filename provided after -in!"
+                        print*, ""
+                        EXIT
+                    else
+                        call get_command_argument((arg+1),CONTROL_FILE_TMP)
+                        write(dash_check,'(A1)') CONTROL_FILE_TMP
+                        if (dash_check .EQ. "-") then
+                            usage_doc_flag = .true.
+                            print*, ""
+                            print*, "ERROR: No input filename provided after -in!"
+                            print*, ""
+                            print*, 'It is possible that the Input Filename begins with a dash ("-").'
+                            print*, "A leading dash is reserved for command-line options. Ensure that"
+                            print*, "the Input Filename provided does not begin with this character."
+                            print*, ""
+                            print*, ""
+                            EXIT
+                        else
+                            skip_iteration = .true. ! skip the next iteration
+                            allocate (character(len=len_trim(CONTROL_FILE_TMP)) :: CONTROL_FILE)
+                            CONTROL_FILE = trim(adjustl(CONTROL_FILE_TMP))
+                        endif
+                    endif
+                else if (TMP_ARG .EQ. "-h") then
+                    full_doc_flag = .true.
+                    EXIT
+                else if (TMP_ARG .EQ. "--help") then
+                    full_doc_flag = .true.
+                    EXIT
+                else
+                    usage_doc_flag = .true.
+                endif
+            endif
+        enddo
     endif
-
-    ! Get the input file
-    arg=1
-    call get_command_argument(arg,CONTROL_FILE)
-
-    ! Check if the verbose flag was input
-    if (narg .EQ. 2) then
-	arg=2
-	call get_command_argument(arg,OPARG_2)
-
-	if (OPARG_2 .EQ. "-v") then
-	    verbose_print = .true.
-	endif
-    endif
+    ! -------------------------------------------
     
-    ! -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    !
-    !		END CHECK COMMAND-LINE ARGUEMENTS AND DISPLAY HELP
-    !
-    ! -----------------------------------------------------------------------
+    
+    
+    ! ===========================================
+    ! DOCUMENTATION
+    ! ===========================================
+    
+    if (usage_doc_flag .or. full_doc_flag) then
+        
+        n_progfunc_doc = 9
+        allocate (progfunc_doc(n_progfunc_doc))
+        progfunc_doc(1) = ""
+        progfunc_doc(2) = "PROGRAM FUNCTIONS:"
+        progfunc_doc(3) = "The program performs the following functions for each heads"
+        progfunc_doc(4) = "file that the program is instructed to process:"
+        progfunc_doc(5) = "1. Read and extract springflow and lake UFA-heads"
+        progfunc_doc(6) = "2. Calculate the average lake head levels for each lake"
+        progfunc_doc(7) = "3. Calculate each springs' springflow from the head,"
+        progfunc_doc(8) = "   pool elevation, and conductance"
+        progfunc_doc(9) = ""
+        
+        n_infiles_doc = 37
+        allocate (infiles_doc(n_infiles_doc))
+        infiles_doc(1)   = "WHAT THE PROGRAM EXPECTS:"
+        infiles_doc(2)   = "The program expects an input control file where each line"
+        infiles_doc(3)   = "defines the file names of input and output files associated"
+        infiles_doc(4)   = "with a single heads file needing to be processed. Each line"
+        infiles_doc(5)   = "of the input control file to be processed MUST have the following"
+        infiles_doc(6)   = "columns in the order listed:"
+        infiles_doc(7)   = "1     LINE_NUMBER - integer number for user reference"
+        infiles_doc(8)   = "2     STRESS-PERIOD_NAME_FILE - input file listing the Stress Periods"
+        infiles_doc(9)   = "3     BINARY_HEAD_FILE - input BINARY heads file"
+        infiles_doc(10)  = "4     SORTED_LAKE_CELL_FILE - input file listing sorted lake cells"
+        infiles_doc(11)  = "5     SORTED_LAKE_ID_AND_CELL_COUNTS - input file listing sorted lake id and cell counts"
+        infiles_doc(12)  = "6     UFA-LAKE_HYDROGRAPH_OUTPUT_FILE_NAME - output file to write out the averaged UFA lake heads"
+        infiles_doc(13)  = "7     SPRING_DRN_FILE_NAME - input drain file used for the particular model"
+        infiles_doc(14)  = "8     SPRINGFLOW_OUTPUT_FILE_NAME - output file to write out springflows"
+        infiles_doc(15)  = ""
+        infiles_doc(16)  = "The input control file MAY contain blank or commented-out lines."
+        infiles_doc(17)  = "Full or relative PATHS of files are accepted."
+        infiles_doc(18)  = "Example input control file:"
+        infiles_doc(19)  = ""
+        infiles_doc(20)  = "----------------------------------------"
+        infiles_doc(21)  = "# 1     LINE_NUMBER"
+        infiles_doc(22)  = "# 2     STRESS-PERIOD_NAME_FILE"
+        infiles_doc(23)  = "# 3     BINARY_HEAD_FILE"
+        infiles_doc(24)  = "# 4     SORTED_LAKE_CELL_FILE"
+        infiles_doc(25)  = "# 5     SORTED_LAKE_ID_AND_CELL_COUNTS"
+        infiles_doc(26)  = "# 6     UFA-LAKE_HYDROGRAPH_OUTPUT_FILE_NAME"
+        infiles_doc(27)  = "# 7     SPRING_DRN_FILE_NAME"
+        infiles_doc(28)  = "# 8     SPRINGFLOW_OUTPUT_FILE_NAME"
+        infiles_doc(29)  = ""
+        !infiles_doc(30)  = '1 "../sp1.txt" hds1.hds cells_1.txt cell_count_1.txt out.lake_1.dat drain1.drn out.springflow_1.dat' !!! FIX !!!
+        infiles_doc(30)  = '1 "../sp1.txt" hds1.hds'
+        !infiles_doc(31)  = '2 sp2.txt hds2.hds cells_2.txt cell_count_2.txt "lakes/out.lake_2.dat" drain2.drn "sprgs/out.springflow_2.dat"' !!! FIX !!!
+        infiles_doc(31)  = '2 sp2.txt hds2.hds'
+        !infiles_doc(32)  = '# 3 "../sp3.txt" hds3.hds cells_3.txt cell_count_3.txt out.lake_3.dat drain3.drn out.springflow_3.dat' !!! FIX !!!
+        infiles_doc(32)  = '# 3 "../sp3.txt"'
+        infiles_doc(33)  = "<a blank line>"
+        infiles_doc(34)  = "<a blank line>"
+        infiles_doc(35)  = "# Just a little comment line"
+        infiles_doc(36)  = "4 sp4.txt hds4.hds cells_4.txt cell_count_4.txt out.lake_4.dat drain4.drn out.springflow_4.dat"
+        infiles_doc(37)  = "----------------------------------------"
+        
+        n_outfiles_doc = 1
+        allocate (outfiles_doc(n_outfiles_doc))
+        
+        n_usage_doc = 25
+        allocate (usage_doc(n_usage_doc))
+        usage_doc(1)     = ""
+        usage_doc(2)     = "USAGE:"
+        usage_doc(3)     = "Names within <> should be replaced with the correct names."
+        usage_doc(4)     = ""
+        usage_doc(5)     = "COMMAND SYNTAX:"
+        usage_doc(6)     = "<PATH>/ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe <options>"
+        usage_doc(7)     = ""
+        usage_doc(8)     = "DESCRIPTION OF OPTIONS:"
+        usage_doc(9)     = "-in <input_control_file>"
+        usage_doc(10)    = "-v [verbose print, optional, default is off]"
+        usage_doc(11)    = "-h or --help [display full documentation]"
+        usage_doc(12)    = ""
+        usage_doc(13)    = "The list of arguments can appear in any order, but -in MUST be followed by the input filename."
+        usage_doc(14)    = ""
+        usage_doc(15)    = "Example of how to run this program with simple stdout print:"
+        usage_doc(16)    = "./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe -in input_control.in"
+        usage_doc(17)    = ""
+        usage_doc(18)    = "Example of how to run this program with verbose stdout print:"
+        usage_doc(19)    = "./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe -in input_control.in -v"
+        usage_doc(20)    = ""
+        usage_doc(21)    = "Example of how to display the full documentation of this program:"
+        usage_doc(22)    = "./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe --help"
+        usage_doc(23)    = "OR"
+        usage_doc(24)    = "./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe -h"
+        usage_doc(25)    = ""
+        ! -------------------------------------------
+        
+        ! ===========================================
+        ! Print Documentation
+        ! ===========================================
+        if (full_doc_flag) then
+            do j=1,n_progfunc_doc
+                write(*,*) trim(adjustl(progfunc_doc(j)))
+            enddo
+
+            do j=1,n_infiles_doc
+                write(*,*) trim(adjustl(infiles_doc(j)))
+            enddo
+            
+            do j=1,n_outfiles_doc
+                write(*,*) trim(adjustl(outfiles_doc(j)))
+            enddo
+            
+            do j=1,n_usage_doc
+                write(*,*) trim(adjustl(usage_doc(j)))
+            enddo
+        else if (usage_doc_flag) then
+            do j=1,n_usage_doc
+                write(*,*) trim(adjustl(usage_doc(j)))
+            enddo
+        endif
+        
+        
+        ! Free Memory
+        deallocate (progfunc_doc)
+        deallocate (infiles_doc)
+        deallocate (outfiles_doc)
+        deallocate (usage_doc)
+        
+        ! End the program
+        stop
+    endif
+    ! ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
     
     
     
