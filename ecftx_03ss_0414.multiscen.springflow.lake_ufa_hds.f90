@@ -346,6 +346,7 @@ PROGRAM MAIN
         
         n_outfiles_doc = 1
         allocate (outfiles_doc(n_outfiles_doc))
+        outfiles_doc(1) = "OUTFILES:"
         
         n_usage_doc = 25
         allocate (usage_doc(n_usage_doc))
