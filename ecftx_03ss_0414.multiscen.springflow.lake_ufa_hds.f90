@@ -1,75 +1,39 @@
 !============================================================================
-!   ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.f90
+!   lake_head_and_springflow_extraction.f90
 !
-!   This code is a combination of the original codes:
+!   This code is a modified combination of the original codes:
 !   - ecftx_03ss_0414.lake_ufa_hds.f
 !   - ecftx_03ss_0414.springflow.f
-!   WEI JIN,    Wednesday, 4/24/2019
+!   written by WEI JIN at St Johns River Water Management District, Wednesday, 4/24/2019
 !
-!   This code is written specifically for the ECFTX model,
-!   version 03ss_0414.
+!   This code was originally written specifically for the ECFTX model,
+!   version 03ss_0414. But was generalized to work for other groundwater models.
 !
-!   PROGRAM FUNCTIONS:
-!   The program performs the following functions for each heads
-!   file that the program is instructed to process:
-!   1. Read and extract springflow and lake UFA-heads
-!   2. Calculate the average lake head levels for each lake
-!   3. Calculate each springs' springflow from the head,
-!      pool elevation, and conductance
+!   -------  PROGRAM OVERVIEW:
+!   This program is a post-processing tool to output heads and
+!   springflow information for a given groundwater model.
+!   For a given MODFLOW heads file, the program performs
+!   the following functions:
+!       1. Read and extract springflow and lake heads values
+!       2. Calculate the average lake head levels for each lake
+!       3. Calculate each springs' springflow from the head,
+!          pool elevation, and conductance
+!       4. Output lake heads and springflows to file
 !
-!   WHAT THE PROGRAM EXPECTS:
-!   The program expects an input control file where each line
-!   defines the file names of input and output files associated
-!   with a single heads file needing to be processed. Each line
-!   of the input control file to be processed MUST have the following
-!   columns in the order listed:
-!   1     LINE_NUMBER - integer number for user reference
-!   2     STRESS-PERIOD_NAME_FILE - input file listing the Stress Periods
-!   3     BINARY_HEAD_FILE - input BINARY heads file
-!   4     SORTED_LAKE_CELL_FILE - input file listing sorted lake cells
-!   5     SORTED_LAKE_ID_AND_CELL_COUNTS - input file listing sorted lake id and cell counts
-!   6     UFA-LAKE_HYDROGRAPH_OUTPUT_FILE_NAME - output file to write out the averaged UFA lake heads
-!   7     SPRING_DRN_FILE_NAME - input drain file used for the particular model
-!   8     SPRINGFLOW_OUTPUT_FILE_NAME - output file to write out springflows
+!   The program is able to post-process multiple, unrelated
+!   models and scenarios in a single run. Also, the model layer
+!   used to extract lake heads is user defined.
 !
-!   The input control file MAY contain blank or commented-out lines.
-!   Full or relative PATHS of files are accepted.
-!   Example input control file:
 !
-!   ----------------------------------------
-!   # 1     LINE_NUMBER
-!   # 2     STRESS-PERIOD_NAME_FILE
-!   # 3     BINARY_HEAD_FILE
-!   # 4     SORTED_LAKE_CELL_FILE
-!   # 5     SORTED_LAKE_ID_AND_CELL_COUNTS
-!   # 6     UFA-LAKE_HYDROGRAPH_OUTPUT_FILE_NAME
-!   # 7     SPRING_DRN_FILE_NAME
-!   # 8     SPRINGFLOW_OUTPUT_FILE_NAME
-!
-!   1 "../stress_periods.txt" TR11.hds "../sorted_lake_cells.txt" "../sorted_lake_id_cell_count.txt" output.lake_ufa_hds.dat "../20190807.drn" output.springflow.dat
-!   2 "stress_periods.txt" "SR_hds_files/SR136.hds" "lake_cells.txt" "sorted_cell_count.txt" "SR_dat_files/lake_ufa_hds/SR136.lake_ufa_hds_out.dat" "20190730.drn" "SR_dat_files/springflow/SR136.springflow_out.dat"
-!   # 3 "../stress_periods.txt" TR11.hds "../sorted_lake_cells.txt" "../sorted_cell_count.txt" output.lake_ufa_hds.dat "20190807.drn" output.springflow.dat
-!   <a blank line>
-!   <a blank line>
-!   # Just a little comment line
-!   4 "stress_periods_2.txt" "hds_files/SR136.hds" "lake_cells.txt" "lake_id_and_cell_count.txt" "lake_ufa_hds/SR136.lake_ufa_hds_out.dat" "20190730.drn" "springs/SR136.springflow_out.dat"
-!   ----------------------------------------
-!
-!   USAGE:
-!   Names within <> should be replaced with the correct names.
-!
-!   <PATH>/ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe <input_control_file> -v[verbose print, optional, default is off]
-!
-!   Example of how to run this program with simple stdout print:
-!   ./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe input_control.in
-!
-!   Example of how to run this program with verbose stdout print:
-!   ./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe input_control.in -v
+!   The full documentation is available by running this code with:
+!       ./lake_head_and_springflow_extraction.exe --help
+!   OR
+!       ./lake_head_and_springflow_extraction.exe -h
 !
 !
 !
 !   COMPILE WITH:
-!   gfortran -g ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.f90 -o ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe
+!   gfortran -g lake_head_and_springflow_extraction.f90 -o bin/lake_head_and_springflow_extraction.exe
 !
 !   Written 20190924. PMBremner
 !
@@ -80,6 +44,14 @@
 !       - Added Usage notes that output to stdout when no arguments given
 !       - Added option to print out all information to stdout, or just each
 !           line of the input control file
+!
+!   Modified 20200317. PMBremner:
+!       - Implemented a MODEL_PARAMETER_FILE to set model array sizes and number of lakes
+!
+!   Modified 20200401. PMBremner:
+!       - Fixed documentation
+!       - Changed name of the code to reflect its new generalized model functionality
+!         original name ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.f90
 !============================================================================
 
 
@@ -90,11 +62,11 @@ PROGRAM MAIN
 !############################################################################
     
     
-    ! =======================================================================
+    ! xoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxox
     !
     !               SET HEADERS AND VARIABLES
     !
-    ! =======================================================================
+    ! xoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxox
     
     ! Import intrinsic functions
     use, intrinsic :: iso_fortran_env
@@ -129,10 +101,11 @@ PROGRAM MAIN
     character(len=5) :: trial_read
     character(len=1) :: tmp1, tmp2, tmp3, tmp4
     character(len=1), parameter :: commentchar="#", blankchar=" "
-    character(len=2) :: OPARG_2
     
-    integer :: n_progfunc_doc, n_infiles_doc, n_outfiles_doc, n_usage_doc
-    character(len=150),dimension(:), allocatable :: progfunc_doc, infiles_doc, outfiles_doc, usage_doc
+    integer :: n_progfunc_doc, n_infiles_doc, n_outfiles_doc
+    integer :: n_usage_doc, n_compile_doc, n_author_doc
+    character(len=150),dimension(:), allocatable :: progfunc_doc, infiles_doc, outfiles_doc
+    character(len=150),dimension(:), allocatable :: usage_doc, compile_doc, author_doc
     
     
     ! Values read from header control file
@@ -200,11 +173,11 @@ PROGRAM MAIN
     character(len=20) :: SPRINGNAME(6)  ! SPRINGS   !!! PMB 20200316. Currently hardcoded but unused, may need changed
     !--------------------------
     
-    ! -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    ! ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
     !
     !               END HEADERS AND VARIABLES
     !
-    ! -----------------------------------------------------------------------
+    ! ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
     
     
     
@@ -288,93 +261,198 @@ PROGRAM MAIN
     ! ===========================================
     
     if (usage_doc_flag .or. full_doc_flag) then
-        
-        n_progfunc_doc = 9
+	
+	n_progfunc_doc = 20
         allocate (progfunc_doc(n_progfunc_doc))
-        progfunc_doc(1) = ""
-        progfunc_doc(2) = "PROGRAM FUNCTIONS:"
-        progfunc_doc(3) = "The program performs the following functions for each heads"
-        progfunc_doc(4) = "file that the program is instructed to process:"
-        progfunc_doc(5) = "1. Read and extract springflow and lake UFA-heads"
-        progfunc_doc(6) = "2. Calculate the average lake head levels for each lake"
-        progfunc_doc(7) = "3. Calculate each springs' springflow from the head,"
-        progfunc_doc(8) = "   pool elevation, and conductance"
-        progfunc_doc(9) = ""
+        progfunc_doc(1)  = ""
+        progfunc_doc(2)  = ""
+        progfunc_doc(3)  = "-------  NAME  -------"
+        progfunc_doc(4)  = "lake_head_and_springflow_extraction"
+        progfunc_doc(5)  = ""
+        progfunc_doc(6)  = "-------  PROGRAM OVERVIEW  -------"
+        progfunc_doc(7)  = "This program is a post-processing tool to output heads and"
+        progfunc_doc(8)  = "springflow information for a given groundwater model."
+        progfunc_doc(9)  = "For a given MODFLOW heads file, the program performs"
+        progfunc_doc(10) = "the following functions:"
+        progfunc_doc(11) = "    1. Read and extract springflow and lake heads values"
+        progfunc_doc(12) = "    2. Calculate the average lake head levels for each lake"
+        progfunc_doc(13) = "    3. Calculate each springs' springflow from the head,"
+        progfunc_doc(14) = "       pool elevation, and conductance"
+        progfunc_doc(15) = "    4. Output lake heads and springflows to file"
+        progfunc_doc(16) = ""
+        progfunc_doc(17) = "The program is able to post-process multiple, unrelated"
+        progfunc_doc(18) = "models and scenarios in a single run. Also, the model layer"
+        progfunc_doc(19) = "used to extract lake heads is user defined."
+        progfunc_doc(20) = ""
         
-        n_infiles_doc = 37
+        
+        n_infiles_doc = 52
         allocate (infiles_doc(n_infiles_doc))
-        infiles_doc(1)   = "WHAT THE PROGRAM EXPECTS:"
-        infiles_doc(2)   = "The program expects an input control file where each line"
-        infiles_doc(3)   = "defines the file names of input and output files associated"
-        infiles_doc(4)   = "with a single heads file needing to be processed. Each line"
-        infiles_doc(5)   = "of the input control file to be processed MUST have the following"
-        infiles_doc(6)   = "columns in the order listed:"
-        infiles_doc(7)   = "1     LINE_NUMBER - integer number for user reference"
-        infiles_doc(8)   = "2     STRESS-PERIOD_NAME_FILE - input file listing the Stress Periods"
-        infiles_doc(9)   = "3     BINARY_HEAD_FILE - input BINARY heads file"
-        infiles_doc(10)  = "4     SORTED_LAKE_CELL_FILE - input file listing sorted lake cells"
-        infiles_doc(11)  = "5     SORTED_LAKE_ID_AND_CELL_COUNTS - input file listing sorted lake id and cell counts"
-        infiles_doc(12)  = "6     UFA-LAKE_HYDROGRAPH_OUTPUT_FILE_NAME - output file to write out the averaged UFA lake heads"
-        infiles_doc(13)  = "7     SPRING_DRN_FILE_NAME - input drain file used for the particular model"
-        infiles_doc(14)  = "8     SPRINGFLOW_OUTPUT_FILE_NAME - output file to write out springflows"
-        infiles_doc(15)  = ""
-        infiles_doc(16)  = "The input control file MAY contain blank or commented-out lines."
-        infiles_doc(17)  = "Full or relative PATHS of files are accepted."
-        infiles_doc(18)  = "Example input control file:"
-        infiles_doc(19)  = ""
-        infiles_doc(20)  = "----------------------------------------"
-        infiles_doc(21)  = "# 1     LINE_NUMBER"
-        infiles_doc(22)  = "# 2     STRESS-PERIOD_NAME_FILE"
-        infiles_doc(23)  = "# 3     BINARY_HEAD_FILE"
-        infiles_doc(24)  = "# 4     SORTED_LAKE_CELL_FILE"
-        infiles_doc(25)  = "# 5     SORTED_LAKE_ID_AND_CELL_COUNTS"
-        infiles_doc(26)  = "# 6     UFA-LAKE_HYDROGRAPH_OUTPUT_FILE_NAME"
-        infiles_doc(27)  = "# 7     SPRING_DRN_FILE_NAME"
-        infiles_doc(28)  = "# 8     SPRINGFLOW_OUTPUT_FILE_NAME"
-        infiles_doc(29)  = ""
-        !infiles_doc(30)  = '1 "../sp1.txt" hds1.hds cells_1.txt cell_count_1.txt out.lake_1.dat drain1.drn out.springflow_1.dat' !!! FIX !!!
-        infiles_doc(30)  = '1 "../sp1.txt" hds1.hds'
-        !infiles_doc(31)  = '2 sp2.txt hds2.hds cells_2.txt cell_count_2.txt "lakes/out.lake_2.dat" drain2.drn "sprgs/out.springflow_2.dat"' !!! FIX !!!
-        infiles_doc(31)  = '2 sp2.txt hds2.hds'
-        !infiles_doc(32)  = '# 3 "../sp3.txt" hds3.hds cells_3.txt cell_count_3.txt out.lake_3.dat drain3.drn out.springflow_3.dat' !!! FIX !!!
-        infiles_doc(32)  = '# 3 "../sp3.txt"'
-        infiles_doc(33)  = "<a blank line>"
-        infiles_doc(34)  = "<a blank line>"
-        infiles_doc(35)  = "# Just a little comment line"
-        infiles_doc(36)  = "4 sp4.txt hds4.hds cells_4.txt cell_count_4.txt out.lake_4.dat drain4.drn out.springflow_4.dat"
-        infiles_doc(37)  = "----------------------------------------"
+        infiles_doc(1)  = ""
+        infiles_doc(2)  = "-------  INPUTS TO THE PROGRAM  -------"
+        infiles_doc(3)  = "The program requires that the name of an input control file"
+        infiles_doc(4)  = "be provided as a command-line argument. Each data line of the"
+        infiles_doc(5)  = "input control file provides the program with the file names"
+        infiles_doc(6)  = "and PATHs of input and output files associated"
+        infiles_doc(7)  = "with a single model scenario run to be processed. Each data"
+        infiles_doc(8)  = "line of the input control file to be processed MUST have the"
+        infiles_doc(9)  = "following columns in the order listed:"
+        infiles_doc(10) = "( [INPUT] = input file; [OUTPUT] = output file )"
+        infiles_doc(11) = "1     LINE_NUMBER - integer number meant only for user reference"
+        infiles_doc(12) = "2     MODEL_PARAMETER_FILE - [INPUT] file listing the model parameter values"
+        infiles_doc(13) = "3     STRESS-PERIOD_NAME_FILE - [INPUT] lists the model Stress Periods"
+        infiles_doc(14) = "4     BINARY_HEAD_FILE - [INPUT] binary MODFLOW heads file"
+        infiles_doc(15) = "5     SORTED_LAKE_CELL_FILE - [INPUT] file listing sorted lake cells"
+        infiles_doc(16) = "6     SORTED_LAKE_ID_AND_CELL_COUNTS - [INPUT] file of sorted lake id and cell counts"
+        infiles_doc(17) = "7     LAKE_HEADS_OUTPUT_FILE_NAME - [OUTPUT] file of the averaged lake heads"
+        infiles_doc(18) = "8     SPRING_DRN_FILE_NAME - [INPUT] drain file used for the particular model"
+        infiles_doc(19) = "9     SPRINGFLOW_OUTPUT_FILE_NAME - [OUTPUT] file of the calculated springflows"
+        infiles_doc(20) = ""
+        infiles_doc(21) = "The input control file MAY contain blank or commented-out lines."
+        infiles_doc(22) = 'Commented lines start with the "#", and are not read by the program.'
+        infiles_doc(23) = "Full or relative PATHS of files are accepted."
+        infiles_doc(24) = "Example input control file:"
+        infiles_doc(25) = "( Note: Data lines of this file are typically long, so for this"
+        infiles_doc(26) = "        example <continue> denotes the continuation of a line )"
+        infiles_doc(27) = ""
+        infiles_doc(28) = "----------------------------------------"
+        infiles_doc(29) = "# 1     LINE_NUMBER"
+        infiles_doc(30) = "# 2     MODEL PARAMETER FILE"
+        infiles_doc(31) = "# 3     STRESS-PERIOD_NAME_FILE"
+        infiles_doc(32) = "# 4     BINARY_HEAD_FILE"
+        infiles_doc(33) = "# 5     SORTED_LAKE_CELL_FILE"
+        infiles_doc(34) = "# 6     SORTED_LAKE_ID_AND_CELL_COUNTS"
+        infiles_doc(35) = "# 7     LAKE_HEADS_OUTPUT_FILE_NAME"
+        infiles_doc(36) = "# 8     SPRING_DRN_FILE_NAME"
+        infiles_doc(37) = "# 9     SPRINGFLOW_OUTPUT_FILE_NAME"
+        infiles_doc(38) = ""
+        infiles_doc(39) = "# File set for model 1"
+        infiles_doc(40) = '1 modparam_1.dat "../sp1.txt" hds1.hds "../sorted_lake_cells.txt"'
+        infiles_doc(41) = '<continue> "../sorted_lake_id_and_cell_count.txt" "lakes/lake_hds_1.dat"'
+        infiles_doc(42) = '<continue> "../drain_file.drn" "springflow/springflow_1.dat"'
+        infiles_doc(43) = ""
+        infiles_doc(44) = "# File set for model 2"
+        infiles_doc(45) = '2 modparam_2.dat "../sp2.txt" hds2.hds "../sorted_lake_cells.txt"'
+        infiles_doc(46) = '<continue> "../sorted_lake_id_and_cell_count.txt" "lakes/lake_hds_2.dat"'
+        infiles_doc(47) = '<continue> "../drain_file.drn" "springflow/springflow_2.dat"'
+        infiles_doc(48) = "----------------------------------------"
+        infiles_doc(49) = ""
+        infiles_doc(50) = "IMPORTANT: Example input and output files"
+        infiles_doc(51) = "should be included in the bundle with this software."
+        infiles_doc(52) = ""
         
-        n_outfiles_doc = 1
+        n_outfiles_doc = 47
         allocate (outfiles_doc(n_outfiles_doc))
-        outfiles_doc(1) = "OUTFILES:"
+        outfiles_doc(1)  = ""
+        outfiles_doc(2)  = "-------  OUTPUT FILES  -------"
+        outfiles_doc(3)  = "There are two output files from this program:"
+        outfiles_doc(4)  = "    1  <LAKE_HEADS_OUTPUT>.dat"
+        outfiles_doc(5)  = "    2  <SPRINGFLOW>.dat"
+        outfiles_doc(6)  = ""
+        outfiles_doc(7)  = "<LAKE_HEADS_OUTPUT>.dat is where the calculated mean"
+        outfiles_doc(8)  = "lake head values are written. The heads value for each lake"
+        outfiles_doc(9)  = "is extracted from a consistent, user defined model layer"
+        outfiles_doc(10) = "from the MODFLOW heads file. The model cells that which"
+        outfiles_doc(11) = "define a lake area are provided by the SORTED_LAKE_CELL_FILE"
+        outfiles_doc(12) = "and SORTED_LAKE_ID_AND_CELL_COUNTS files. The value output"
+        outfiles_doc(13) = "is the mean of all the heads values over the cells defining"
+        outfiles_doc(14) = "the lake area."
+        outfiles_doc(15) = ""
+        outfiles_doc(16) = "The rows of <LAKE_HEADS_OUTPUT>.dat are:"
+        outfiles_doc(17) = "    1    HEADER LINE DESCRIBING DATA COLUMNS"
+        outfiles_doc(18) = "    2-N  OUTPUT DATA"
+        outfiles_doc(19) = "The columns of <LAKE_HEADS_OUTPUT>.dat are:"
+        outfiles_doc(20) = "    1    LAKE_ID"
+        outfiles_doc(21) = "    2    MEAN_LAKE_HEAD (STRESS PERIOD 1)"
+        outfiles_doc(22) = "    3    MEAN_LAKE_HEAD (STRESS PERIOD 2)"
+        outfiles_doc(23) = "    ."
+        outfiles_doc(24) = "    ."
+        outfiles_doc(25) = "    ."
+        outfiles_doc(26) = "    M    MEAN_LAKE_HEAD (LAST STRESS PERIOD)"
+        outfiles_doc(27) = ""
+        outfiles_doc(28) = "<SPRINGFLOW>.dat is where the calculated springflow value"
+        outfiles_doc(29) = "for each spring listed in the MODFLOW drain file is output."
+        outfiles_doc(30) = "Springflow is calculated as the max between zero and"
+        outfiles_doc(31) = "[ (heads_value - pool_elevation) * spring-conductance ]."
+        outfiles_doc(32) = ""
+        outfiles_doc(33) = "The rows of <SPRINGFLOW>.dat are:"
+        outfiles_doc(34) = "    1    HEADER LINE DESCRIBING DATA COLUMNS"
+        outfiles_doc(35) = "    2-N  OUTPUT DATA"
+        outfiles_doc(36) = "The columns of <SPRINGFLOW>.dat are:"
+        outfiles_doc(37) = "    1     MONTH_YEAR"
+        outfiles_doc(38) = "    2     STRESS_PERIOD"
+        outfiles_doc(39) = "    3     MODEL LAYER"
+        outfiles_doc(40) = "    4     MODEL ROW"
+        outfiles_doc(41) = "    5     MODEL COLUMN"
+        outfiles_doc(42) = "    6     POOL_ELEVATION"
+        outfiles_doc(43) = "    7     SPRING CONDUCTANCE"
+        outfiles_doc(44) = "    8     SPRINGKEY"
+        outfiles_doc(45) = "    9     SPRINGFLOW_CFD"
+        outfiles_doc(46) = "    10    SPRINGFLOW_CFS"
+        outfiles_doc(47) = ""
         
-        n_usage_doc = 25
+        n_usage_doc = 26
         allocate (usage_doc(n_usage_doc))
-        usage_doc(1)     = ""
-        usage_doc(2)     = "USAGE:"
-        usage_doc(3)     = "Names within <> should be replaced with the correct names."
-        usage_doc(4)     = ""
-        usage_doc(5)     = "COMMAND SYNTAX:"
-        usage_doc(6)     = "<PATH>/ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe <options>"
-        usage_doc(7)     = ""
-        usage_doc(8)     = "DESCRIPTION OF OPTIONS:"
-        usage_doc(9)     = "-in <input_control_file>"
-        usage_doc(10)    = "-v [verbose print, optional, default is off]"
-        usage_doc(11)    = "-h or --help [display full documentation]"
-        usage_doc(12)    = ""
-        usage_doc(13)    = "The list of arguments can appear in any order, but -in MUST be followed by the input filename."
-        usage_doc(14)    = ""
-        usage_doc(15)    = "Example of how to run this program with simple stdout print:"
-        usage_doc(16)    = "./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe -in input_control.in"
-        usage_doc(17)    = ""
-        usage_doc(18)    = "Example of how to run this program with verbose stdout print:"
-        usage_doc(19)    = "./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe -in input_control.in -v"
-        usage_doc(20)    = ""
-        usage_doc(21)    = "Example of how to display the full documentation of this program:"
-        usage_doc(22)    = "./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe --help"
-        usage_doc(23)    = "OR"
-        usage_doc(24)    = "./ecftx_03ss_0414.multiscen.springflow.lake_ufa_hds.exe -h"
-        usage_doc(25)    = ""
+        usage_doc(1)  = ""
+        usage_doc(2)  = "-------  USAGE  -------"
+        usage_doc(3)  = "Names within <> should be replaced with the correct names."
+        usage_doc(4)  = ""
+        usage_doc(5)  = "COMMAND SYNTAX:"
+        usage_doc(6)  = "<PATH>/lake_head_and_springflow_extraction.exe <options>"
+        usage_doc(7)  = ""
+        usage_doc(8)  = "DESCRIPTION OF OPTIONS:"
+        usage_doc(9)  = "-in <input_control_file>"
+        usage_doc(10) = "-v [verbose print, optional, default is off]"
+        usage_doc(11) = "-h or --help [display full documentation]"
+        usage_doc(12) = ""
+        usage_doc(13) = "The list of arguments can appear in any order, but -in MUST be"
+        usage_doc(14) = "followed by the input filename."
+        usage_doc(15) = ""
+        usage_doc(16) = "Example of how to run this program with simple stdout print:"
+        usage_doc(17) = "./lake_head_and_springflow_extraction.exe -in input_control.in"
+        usage_doc(18) = ""
+        usage_doc(19) = "Example of how to run this program with verbose stdout print:"
+        usage_doc(20) = "./lake_head_and_springflow_extraction.exe -in input_control.in -v"
+        usage_doc(21) = ""
+        usage_doc(22) = "Example of how to display the full documentation of this program:"
+        usage_doc(23) = "./lake_head_and_springflow_extraction.exe --help"
+        usage_doc(24) = "OR"
+        usage_doc(25) = "./lake_head_and_springflow_extraction.exe -h"
+        usage_doc(26) = ""
+        
+        n_compile_doc = 14
+        allocate (compile_doc(n_compile_doc))
+        compile_doc(1)  = ""
+        compile_doc(2)  = "-------  COMPILING  -------"
+        compile_doc(3)  = "This program has been compiled using the GNU Fortran compiler gfortran."
+        compile_doc(4)  = "No other compilers were tried, however this program was written in"
+        compile_doc(5)  = "standard Fortran compliant syntax, and is expected to compile with"
+        compile_doc(6)  = "no issues with any modern compiler."
+        compile_doc(7)  = ""
+        compile_doc(8)  = "Example using gfortran:"
+        compile_doc(9)  = "    gfortran -g <source_code> -o <binary_executable>"
+        compile_doc(10) = "  where"
+        compile_doc(11) = "    <source_code> = lake_head_and_springflow_extraction.f90"
+        compile_doc(12) = "  and"
+        compile_doc(13) = "    <binary_executable> = bin/lake_head_and_springflow_extraction.exe"
+        compile_doc(14) = ""
+        
+        n_author_doc = 14
+        allocate (author_doc(n_author_doc))
+        author_doc(1)  = ""
+        author_doc(2)  = "-------  AUTHOR  -------"
+        author_doc(3)  = "lake_head_and_springflow_extraction was originally written by Paul Bremner,"
+        author_doc(4)  = "and has benefitted from contribution by others since then. The core of"
+        author_doc(5)  = "this program originated from a modified combination of the codes:"
+	author_doc(6)  = "    - ecftx_03ss_0414.lake_ufa_hds.f"
+	author_doc(7)  = "    - ecftx_03ss_0414.springflow.f"
+	author_doc(8)  = "written by Wei Jin at St Johns River Water Management District, 4/24/2019."
+	author_doc(9)  = ""
+	author_doc(10) = "For support or to report issues contact Paul Bremner at the"
+	author_doc(11) = "St Johns River Water Management at pbremner<at>sjrwmd.com"
+	author_doc(12) = ""
+	author_doc(13) = "02 Apr 2020"
+	author_doc(14) = ""
         ! -------------------------------------------
         
         ! ===========================================
@@ -382,23 +460,31 @@ PROGRAM MAIN
         ! ===========================================
         if (full_doc_flag) then
             do j=1,n_progfunc_doc
-                write(*,*) trim(adjustl(progfunc_doc(j)))
+                write(*,*) trim(progfunc_doc(j))
             enddo
 
             do j=1,n_infiles_doc
-                write(*,*) trim(adjustl(infiles_doc(j)))
+                write(*,*) trim(infiles_doc(j))
             enddo
             
             do j=1,n_outfiles_doc
-                write(*,*) trim(adjustl(outfiles_doc(j)))
+                write(*,*) trim(outfiles_doc(j))
             enddo
             
             do j=1,n_usage_doc
-                write(*,*) trim(adjustl(usage_doc(j)))
+                write(*,*) trim(usage_doc(j))
+            enddo
+            
+            do j=1,n_compile_doc
+                write(*,*) trim(compile_doc(j))
+            enddo
+            
+            do j=1,n_author_doc
+                write(*,*) trim(author_doc(j))
             enddo
         else if (usage_doc_flag) then
             do j=1,n_usage_doc
-                write(*,*) trim(adjustl(usage_doc(j)))
+                write(*,*) trim(usage_doc(j))
             enddo
         endif
         
@@ -413,10 +499,14 @@ PROGRAM MAIN
         stop
     endif
     ! ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+    !
+    ! END PROCESS COMMAND-LINE ARGUEMENTS
+    !
+    ! ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
     
     
     
-    ! =======================================================================
+    ! xoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxox
     !
     !   		READ THE MASTER CONTROL FILE
     !			     MARCH THROUGH LIST
@@ -434,7 +524,7 @@ PROGRAM MAIN
     !   # 7     UFA-LAKE_HYDROGRAPH_FILE_NAME
     !   # 8     SPRING_DRN_FILE_NAME
     !   # 9     SPRINGFLOW_OUTPUT_FILE_NAME
-    ! =======================================================================
+    ! xoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxoxox
 
     open(unit=unit_contfle, file=CONTROL_FILE, form='FORMATTED', status='OLD', iostat=ioerr &
     , action='read', position='rewind',access='sequential')
@@ -563,11 +653,11 @@ PROGRAM MAIN
 	
 	
 	
-	! ===================================================================
+	! =========================================================
 	!
-	!	READ THE HEADER CONTROL FILE AND SET THE ARRAY SIZES
+	! READ THE HEADER CONTROL FILE AND SET THE ARRAY SIZES
 	!
-	! ===================================================================
+	! =========================================================
 	
 	open(unit=unit_hdr_file, file=HEADER_CONTROL_FILE, form='FORMATTED', status='OLD', iostat=ioerr &
 	, action='read', position='rewind',access='sequential')
@@ -579,8 +669,6 @@ PROGRAM MAIN
 	! Read through the rest of the file
 	headerloop: do
 	    
-	    
-	    !@@@@@@@@@@@@@@@@@@@@@@@@@@
 	    ! Read in a small part of the line to check for blank or commented lines
 	    read(unit_hdr_file,*, iostat=ioerr) trial_read
 	    if (ioerr .gt. 0) then
@@ -604,7 +692,6 @@ PROGRAM MAIN
 
 		! Rewind the file record one space
 		backspace (unit_hdr_file)
-		!@@@@@@@@@@@@@@@@@@@@@@@@@@
 		
 		! Read line and look for the key words
 		read(unit_hdr_file,*, iostat=ioerr) keyword1, keyword2, input_header_value
@@ -654,19 +741,19 @@ PROGRAM MAIN
 	allocate ( HDS_LAKE(NUM_LAKE_CELLS,NSP) )
 	allocate ( AVERAGE_HDS_LAKE(NUM_LAKES,NSP) )
 	allocate ( HDS(NCOL,NROW,NLAY) )
-	! -------------------------------------------------------------------
+	! ---------------------------------------------------------
 	!
-	!	END READ THE HEADER CONTROL FILE AND SET THE ARRAY SIZES
+	! END READ THE HEADER CONTROL FILE AND SET THE ARRAY SIZES
 	!
-	! -------------------------------------------------------------------
+	! ---------------------------------------------------------
 	
 	
 
-	! ===================================================================
+	! =========================================================
 	!
 	!	READ THE STRESS PERIOD FILE
 	!
-	! ===================================================================
+	! =========================================================
 	open(unit=unit_SP, file=trim(STRESS_PERIOD_FILE), form='FORMATTED', status='OLD', iostat=ioerr &
 	, action='read', position='rewind', access='sequential')
 	if (ioerr .ne. 0) then
@@ -685,11 +772,11 @@ PROGRAM MAIN
 	enddo
 
 	close(unit_SP)
-	! -------------------------------------------------------------------
+	! ---------------------------------------------------------
 	!
 	!	END READ STRESS PERIOD
 	!
-	! -------------------------------------------------------------------
+	! ---------------------------------------------------------
 
 
 	! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -699,11 +786,11 @@ PROGRAM MAIN
 	! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-	! ===================================================================
+	! =========================================================
 	!
 	!	READ THE SORTED LAKE CELL FILE
 	!
-	! ===================================================================
+	! =========================================================
 	open(unit=unit_LCF, file=LAKE_CELL_FILE, form='FORMATTED', status='OLD', iostat=ioerr &
 	, action='read', position='rewind', access='sequential')
 	if (ioerr .ne. 0) then
@@ -721,20 +808,20 @@ PROGRAM MAIN
 	enddo
 
 	close(unit_LCF)
-	! -------------------------------------------------------------------
+	! ---------------------------------------------------------
 	!
 	!	END READ SORTED LAKE CELL FILE
 	!
-	! -------------------------------------------------------------------
+	! ---------------------------------------------------------
 
 
-	! ===================================================================
+	! =========================================================
 	!	OPEN AND READ SPRING DRN FILE
 	!
 	!	OPEN AND READ THE BINARY HEADS FILE
 	!
 	!	OPEN AND WRITE TO SPRINGFLOW OUTPUT FILE NAME
-	! ===================================================================
+	! =========================================================
 
 	! Spring Drain file
 	open(unit=unit_SPR_DRN, file=SPRING_DRN_FILE, form='FORMATTED', status='OLD', iostat=ioerr &
@@ -917,12 +1004,12 @@ PROGRAM MAIN
     enddo inputloop
 
     close(unit_contfle)
-    ! -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    ! ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
     !
     !   		END READ THE MASTER CONTROL FILE
     !			     END MARCH THROUGH LIST
     !
-    ! -----------------------------------------------------------------------
+    ! ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
 
 
 !############################################################################
