@@ -352,7 +352,7 @@ PROGRAM MAIN
         outfiles_doc(7)  = "<LAKE_HEADS_OUTPUT>.dat is where the calculated mean"
         outfiles_doc(8)  = "lake head values are written. The heads value for each lake"
         outfiles_doc(9)  = "is extracted from a consistent, user defined model layer"
-        outfiles_doc(10) = "from the MODFLOW heads file. The model cells that which"
+        outfiles_doc(10) = "from the MODFLOW heads file. The model cells which"
         outfiles_doc(11) = "define a lake area are provided by the SORTED_LAKE_CELL_FILE"
         outfiles_doc(12) = "and SORTED_LAKE_ID_AND_CELL_COUNTS files. The value output"
         outfiles_doc(13) = "is the mean of all the heads values over the cells defining"
