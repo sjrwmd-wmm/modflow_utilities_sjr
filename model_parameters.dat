@@ -25,6 +25,6 @@ set NumberOfLay: 11
 set NumberOfStressPeriods: 133
 set NumberOfTimeSteps: 1
 set NumberOfCellByCell: 12
-set NumberOfLakes: 488
-set NumberOfLakeCells: 18180
+set NumberOfLakes: 492
+set NumberOfLakeCells: 18367
 set LakeHeadsLayer: 3
